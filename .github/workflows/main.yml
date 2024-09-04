@@ -10,7 +10,9 @@ jobs:
         uses: fvoon/github-actions-playground@v1
         with:
           who-to-greet: 'Mona the Octocat'
-      - run: echo random-number "$RANDOM_NUMBER"
+      - run: |
+          RANDOM_NUMBER=10 &&
+          echo random number "$((RANDOM_NUMBER * 6))"
         shell: bash
         env:
           RANDOM_NUMBER: ${{ steps.foo.outputs.random-number }}
