@@ -1,0 +1,15 @@
+on: [push]
+
+jobs:
+  send_slack_notification:
+    name: Send Slack Notification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: 'https://hooks.slack.com/services/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'
+          SLACK_COLOR: '#00E5C4'
+          SLACK_CHANNEL: '#payments-performance-tests'
+          SLACK_ICON_EMOJI: ':scales:'
+          SLACK_MESSAGE: "Stress Test Completed w/ 5 Iterations of 5, 10, 15, 20, 50 Multiplier."
