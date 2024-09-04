@@ -93,7 +93,7 @@ jobs:
   run-k6-tests:
     needs: clone
     name: Run k6 Tests
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     environment: staging
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
@@ -138,27 +138,5 @@ jobs:
     steps:
       - name: Send Slack Notification
         run: |
-          payload=\
-          {\
-            "attachments": [\
-              {\
-                "fallback": "Stress Test Completed w/ 5 Iterations",\
-                "color": "#00E5C4",\
-                "blocks": [\
-                  {\
-                    "type": "section",\
-                    "fields": [\
-                      {"type": "mrkdwn", "text": "*Completed Stress Test*\\nIterations 5, 10, 15, 20, 50"},\
-                    ]\
-                  }\
-                  {\
-                    "type": "context",\
-                    "elements": [\
-                      {"type": "plain_text", "text": "Branch: ${{ github.ref_name }} • Path: ${{ github.worksapce }}/ml-k6-load-test", "emoji": true}\
-                    ]\
-                  }\
-                ]\
-              }\
-            ]\
-          }\
+          payload={"attachments":[{"fallback":"Stress Test Completed w/ 5 Iterations","color":"#00E5C4","blocks":[{"type":"section","fields":[{"type":"mrkdwn","text":"*Completed Stress Test*\\nIterations 5, 10, 15, 20, 50"}]},{"type":"context","elements":[{"type":"plain_text","text":"Branch: ${{ github.ref_name }} • Path: ${{ github.workspace }}/ml-k6-load-test","emoji":true}]}]}]}\
           && curl -X POST --data-urlencode "payload=${payload}" "${{ inputs.slack_channel_link }}"
