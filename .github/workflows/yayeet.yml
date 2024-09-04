@@ -1,0 +1,164 @@
+name: Stress Test
+
+on:
+  push:
+  workflow_dispatch: # Allow manual triggering of the workflow
+    inputs:
+      pod_name:
+        description: 'Pod Name'
+        required: true
+        default: 'payments'
+        type: choice
+        options:
+          - payments
+          - banking
+          - fraud
+          - bank-verification
+          - genAI-search
+          - instacash
+          - loan
+          - membership
+      file_path:
+        description: 'File Path'
+        required: true
+        default: '/wallet-api/fund-controller-v2/get-v2-fund'
+        type: choice
+        options:
+          - /wallet-api/e2e-flow/e2e-add-debit-card-flow
+          - /wallet-api/e2e-flow/e2e-add-manual-ach-flow
+          - /wallet-api/e2e-flow/e2e-transfer-v3-flow
+          - /wallet-api/fund-controller/delete-ach-fund
+          - /wallet-api/fund-controller/get-fund
+          - /wallet-api/fund-controller/get-fundid-userid
+          - /wallet-api/fund-controller/post-fund-ach-add
+          - /wallet-api/fund-controller/post-fund-generate-esign-doc
+          - /wallet-api/fund-controller-v2/get-v2-fund
+          - /wallet-api/fund-controller-v2/get-v2-fund-disbursement-eligibility
+          - /wallet-api/fund-controller-v2/get-v2-fund-product
+          - /wallet-api/fund-controller-v2/post-v2-fund-card-add
+          - /wallet-api/fund-transfer-controller/get-fund-transfer-status
+          - /wallet-api/fund-transfer-controller/post-fund-transfer-v3
+      slack_channel_link:
+        description: 'Slack Channel Link'
+        type: string
+        required: true
+        default: 'https://hooks.slack.com/services/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'
+      ramp_up_duration:
+        description: 'Ramp Up Duration'
+        type: string
+        required: true
+        default: '0m'
+      ramp_up_target:
+        description: 'Ramp Up Target'
+        type: number
+        required: true
+        default: 0
+      stay_duration:
+        description: 'Stay Duration'
+        type: string
+        required: true
+        default: '1m'
+      stay_target:
+        description: 'Stay Target'
+        type: number
+        required: true
+        default: 1
+      ramp_down_duration:
+        description: 'Ramp Down Duration'
+        type: string
+        required: true
+        default: '0m'
+      ramp_down_target:
+        description: 'Ramp Down Target'
+        type: number
+        required: true
+        default: 0
+      vus:
+        description: 'No. of Virtual Users'
+        type: number
+        required: false
+        default: 1
+
+jobs:
+  clone:
+    name: Checkout Repository
+    runs-on: self-hosted
+    environment: staging
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}  # Checkout the specified branch
+
+  run-k6-tests:
+    needs: clone
+    name: Run k6 Tests
+    runs-on: self-hosted
+    environment: staging
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+    strategy:
+      matrix:
+        multiplier: [ 5, 10, 15, 20, 50 ]
+      max-parallel: 1
+    defaults:
+      run:
+        shell: bash
+        working-directory: "./"
+    steps:
+      - uses: grafana/setup-k6-action@v1
+      - name: Run k6 Tests
+        run: |
+          set -o pipefail \
+          && MULTIPLIER_VALUE=${{ matrix.multiplier }} \
+          && echo $MULTIPLIER_VALUE \
+          && MULTIPLIED_RAMP_UP_TARGET=$((MULTIPLIER_VALUE * ${{ inputs.ramp_up_target }})) \
+          && MULTIPLIED_STAY_TARGET=$((MULTIPLIER_VALUE * ${{ inputs.stay_target }})) \
+          && MULTIPLIED_VUS=$((MULTIPLIER_VALUE * ${{ inputs.vus }})) \
+          && k6 run src/tests/${{ inputs.pod_name }}${{ inputs.file_path }}.js \
+             -e RAMP_UP_DURATION=${{ inputs.ramp_up_duration }} \
+             -e RAMP_UP_TARGET=$MULTIPLIED_RAMP_UP_TARGET \
+             -e STAY_DURATION=${{ inputs.stay_duration }} \
+             -e STAY_TARGET=$MULTIPLIED_STAY_TARGET \
+             -e RAMP_DOWN_DURATION=${{ inputs.ramp_down_duration }} \
+             -e RAMP_DOWN_TARGET=${{ inputs.ramp_down_target }} \
+             -e VUS=$MULTIPLIED_VUS \
+             -e ITERATION= | tee test_report \
+          && cat test_report | awk '/checks/,/vus_max/' | sed ':a;N;$!ba;s/\\n/\\\\n/g' > extracted_report \
+          && export TEST_STATUS=$? \
+          && echo "TEST_STATUS=$TEST_STATUS" >> $GITHUB_ENV \
+          && if [ "$TEST_STATUS" -gt "0" ]; then exit $TEST_STATUS; fi
+
+  send_slack_notification:
+#    needs: run-k6-tests
+    name: Send Slack Notification
+    runs-on: self-hosted
+    environment: staging
+    steps:
+      - name: Send Slack Notification
+        run: |
+          payload=\
+          {\
+            "attachments": [\
+              {\
+                "fallback": "Stress Test Completed w/ 5 Iterations",\
+                "color": "#00E5C4",\
+                "blocks": [\
+                  {\
+                    "type": "section",\
+                    "fields": [\
+                      {"type": "mrkdwn", "text": "*Completed Stress Test*\\nIterations 5, 10, 15, 20, 50"},\
+                    ]\
+                  }\
+                  {\
+                    "type": "context",\
+                    "elements": [\
+                      {"type": "plain_text", "text": "Branch: ${{ github.ref_name }} • Path: ${{ github.worksapce }}/ml-k6-load-test", "emoji": true}\
+                    ]\
+                  }\
+                ]\
+              }\
+            ]\
+          }\
+          && curl -X POST --data-urlencode "payload=${payload}" "${{ inputs.slack_channel_link }}"
