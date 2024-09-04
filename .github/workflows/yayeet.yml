@@ -82,7 +82,7 @@ on:
 jobs:
   clone:
     name: Checkout Repository
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     environment: staging
     steps:
       - name: Checkout Repository
@@ -133,8 +133,8 @@ jobs:
   send_slack_notification:
 #    needs: run-k6-tests
     name: Send Slack Notification
-    runs-on: self-hosted
-    environment: staging
+    runs-on: ubuntu-latest
+#    environment: staging
     steps:
       - name: Send Slack Notification
         run: |
