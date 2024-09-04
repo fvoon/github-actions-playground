@@ -11,8 +11,9 @@ jobs:
         with:
           who-to-greet: 'Mona the Octocat'
       - run: |
-          RANDOM_NUMBER="$RANDOM_NUMBER" &&
-          echo random number "$((RANDOM_NUMBER * 6))"
+          RANDOM="$RANDOM_NUMBER" &&
+          echo random number "$RANDOM" &&
+          echo multiplied "$((RANDOM * 6))"
         shell: bash
         env:
           RANDOM_NUMBER: ${{ steps.foo.outputs.random-number }}
